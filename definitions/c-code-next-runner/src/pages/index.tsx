@@ -22,6 +22,22 @@ const PLACEHOLDER_CSS = `
       --lv-line: rgba(245, 245, 244, 0.12);
     }
   }
+  @keyframes lv-spin {
+    to { transform: rotate(360deg); }
+  }
+  .lv-spinner {
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 2px solid var(--lv-line);
+    border-top-color: var(--lv-text);
+    border-radius: 9999px;
+    animation: lv-spin 0.8s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lv-spinner {
+      animation: none;
+    }
+  }
 `;
 
 export default function Home() {
@@ -67,17 +83,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div
-            className="mx-auto w-56 h-px relative overflow-hidden rounded-full"
-            style={{ background: "var(--lv-line)" }}
-          >
-            <motion.div
-              className="absolute inset-y-0 w-20"
-              style={{ background: "currentColor" }}
-              animate={{ left: ["-30%", "110%"] }}
-              transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-            />
-          </div>
+          <div className="lv-spinner mx-auto" role="status" aria-label="Building your app" />
         </motion.div>
 
         <footer

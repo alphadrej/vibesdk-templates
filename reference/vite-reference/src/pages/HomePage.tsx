@@ -22,9 +22,21 @@ const PLACEHOLDER_CSS = `
       --lv-line: rgba(245, 245, 244, 0.12);
     }
   }
-  @keyframes lv-sweep {
-    0% { left: -30%; }
-    100% { left: 110%; }
+  @keyframes lv-spin {
+    to { transform: rotate(360deg); }
+  }
+  .lv-spinner {
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 2px solid var(--lv-line);
+    border-top-color: var(--lv-text);
+    border-radius: 9999px;
+    animation: lv-spin 0.8s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lv-spinner {
+      animation: none;
+    }
   }
 `
 
@@ -63,15 +75,7 @@ export function HomePage() {
             <TemplateDemo />
           </div>
         ) : (
-          <div
-            className="mx-auto w-56 h-px relative overflow-hidden rounded-full"
-            style={{ background: 'var(--lv-line)' }}
-          >
-            <div
-              className="absolute inset-y-0 w-20"
-              style={{ background: 'currentColor', animation: 'lv-sweep 1.6s ease-in-out infinite' }}
-            />
-          </div>
+          <div className="lv-spinner mx-auto" role="status" aria-label="Building your app" />
         )}
       </div>
 
