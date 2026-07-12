@@ -1,4 +1,5 @@
 [
+    "index.html",
     "components.json",
     "package.json",
     "tailwind.config.js",
@@ -6,7 +7,6 @@
     "tsconfig.app.json",
     "tsconfig.node.json",
     "tsconfig.worker.json",
-    "src/App.css",
     "src/index.css",
     "src/main.tsx",
     "src/lib/",

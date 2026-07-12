@@ -14,7 +14,7 @@ There are already several models presupplied with the template along with proper
   * **Model Context Protocol (MCP)** client for real server integration
   * **OpenAI SDK** for AI model integration via Cloudflare AI Gateway
   * **Production MCP Servers** including Cloudflare Bindings and Observability
-  * **Tailwind CSS** for utility-first styling with glass morphism effects
+  * **Tailwind CSS** for utility-first styling with semantic theme tokens
   * **Framer Motion** for smooth chat animations and loading states
   * **Lucide Icons** (React) for modern, consistent iconography
   * **Shadcn/UI** (v2.3.0) for accessible chat components built on Radix UI primitives

@@ -25,7 +25,7 @@ This template provides a production-ready AI agent chatbot built with Cloudflare
   * **React + Vite** for fast, modern frontend development
   * **OpenAI SDK** for AI model integration via Cloudflare AI Gateway
   * **Production Cloudflare MCP Servers** (Documentation and Browser)
-  * **Tailwind CSS** with glass morphism effects and responsive design
+  * **Tailwind CSS** with semantic theme tokens and responsive design
   * **Framer Motion** for smooth chat animations and loading states
   * **Shadcn/UI** components for polished interface elements
   * **TypeScript** for type safety and extensible architecture

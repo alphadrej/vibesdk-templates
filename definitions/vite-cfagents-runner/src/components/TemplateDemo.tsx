@@ -48,10 +48,10 @@ export function TemplateDemo() {
   }
 
   return (
-    <Card className="max-w-5xl mx-auto h-[55vh] flex flex-col backdrop-blur-xl bg-white/10 dark:bg-black/20 border-white/20 shadow-2xl">
+    <Card className="mx-auto flex h-[55vh] max-w-5xl flex-col border-border shadow-sm">
       <div className="p-4 border-b flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center">
-          <Bot className="w-4 h-4 text-white" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
+          <Bot className="h-4 w-4 text-primary-foreground" />
         </div>
         <h2 className="font-display font-bold text-lg">Chat demo</h2>
 

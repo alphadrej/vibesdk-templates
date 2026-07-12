@@ -22,7 +22,7 @@ export function AppSidebar(): JSX.Element {
     <Sidebar>
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-1">
-          <div className="h-6 w-6 rounded-md bg-gradient-to-br from-indigo-500 to-purple-500" />
+          <div className="h-6 w-6 rounded-md bg-primary" />
           <span className="text-sm font-medium">Demo Sidebar</span>
         </div>
         <SidebarInput placeholder="Search" />

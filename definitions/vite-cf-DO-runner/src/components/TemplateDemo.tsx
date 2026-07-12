@@ -7,8 +7,8 @@ import type { ApiResponse, DemoItem } from '@shared/types'
 
 export const HAS_TEMPLATE_DEMO = true
 
-const glassCard = 'backdrop-blur-xl bg-white/60 dark:bg-black/20 border-white/20 dark:border-white/10 shadow-2xl'
-const glassRow = 'flex justify-between items-center p-2 rounded-md border border-white/10 bg-white/5 dark:bg-white/5'
+const cardClass = 'border-border shadow-sm'
+const rowClass = 'flex items-center justify-between rounded-md border bg-muted/40 p-2'
 
 export function TemplateDemo() {
   const [counter, setCounter] = useState<number>(0)
@@ -35,10 +35,10 @@ export function TemplateDemo() {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <Card className={glassCard}>
+      <Card className={cardClass}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Database className="h-5 w-5 text-blue-500" />
+            <Database className="h-5 w-5 text-muted-foreground" />
             Durable Object Storage
           </CardTitle>
         </CardHeader>
@@ -47,7 +47,7 @@ export function TemplateDemo() {
             <div className="text-sm text-muted-foreground">Loading…</div>
           ) : demoItems.length ? (
             demoItems.map((item) => (
-              <div key={item.id} className={glassRow}>
+              <div key={item.id} className={rowClass}>
                 <span className="font-medium">{item.name}</span>
                 <span className="text-muted-foreground">Value: {item.value}</span>
               </div>
@@ -58,10 +58,10 @@ export function TemplateDemo() {
         </CardContent>
       </Card>
 
-      <Card className={glassCard}>
+      <Card className={cardClass}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Cpu className="h-5 w-5 text-green-500" />
+            <Cpu className="h-5 w-5 text-muted-foreground" />
             Durable Object Counter
           </CardTitle>
         </CardHeader>

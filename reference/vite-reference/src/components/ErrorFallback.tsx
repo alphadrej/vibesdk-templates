@@ -41,11 +41,8 @@ export function ErrorFallback({
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
-        {/* Animated background gradient */}
-        <div className="absolute inset-0 bg-gradient-rainbow opacity-5 dark:opacity-10" />
-        
         {/* Error card */}
-        <Card className="relative backdrop-blur-sm shadow-2xl">
+        <Card className="shadow-sm">
           <CardContent className="p-8 space-y-6">
             {/* Icon and title */}
             <div className="text-center space-y-4">
@@ -59,7 +56,7 @@ export function ErrorFallback({
             {/* Status indicator */}
             {statusMessage && (
               <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                <div className="w-2 h-2 rounded-full bg-muted-foreground animate-pulse" />
                 <span>{statusMessage}</span>
               </div>
             )}

@@ -11,7 +11,7 @@ import { api } from '@/lib/api-client'
 
 export const HAS_TEMPLATE_DEMO = true
 
-const glassCard = 'backdrop-blur-xl bg-white/10 dark:bg-black/20 border-white/20 shadow-2xl'
+const interactiveRow = 'w-full rounded-md border px-3 py-2 text-left transition-colors'
 
 export function TemplateDemo() {
   const [users, setUsers] = useState<User[]>([])
@@ -93,7 +93,7 @@ export function TemplateDemo() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <Card className={glassCard}>
+      <Card className="border-border shadow-sm">
         <CardHeader>
           <CardTitle className="text-base">Entities</CardTitle>
         </CardHeader>
@@ -110,7 +110,7 @@ export function TemplateDemo() {
                   key={u.id}
                   type="button"
                   onClick={() => setSelectedUserId(u.id)}
-                  className={`w-full text-left flex items-center justify-between border rounded px-3 py-2 transition-colors ${selectedUserId === u.id ? 'bg-white/10 dark:bg-white/5' : 'hover:bg-white/5 dark:hover:bg-white/5'}`}
+                  className={`${interactiveRow} ${selectedUserId === u.id ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/60'}`}
                 >
                   <span className="font-medium">{u.name}</span>
                   <span className="text-xs text-muted-foreground">{u.id.slice(0, 6)}…</span>
@@ -121,7 +121,7 @@ export function TemplateDemo() {
             </div>
           </div>
 
-          <Separator className="bg-white/10" />
+          <Separator className="bg-border" />
 
           <div className="space-y-2">
             <div className="text-sm font-medium">Chats</div>
@@ -135,7 +135,7 @@ export function TemplateDemo() {
                   key={c.id}
                   type="button"
                   onClick={() => setSelectedChatId(c.id)}
-                  className={`w-full text-left flex items-center justify-between border rounded px-3 py-2 transition-colors ${selectedChatId === c.id ? 'bg-white/10 dark:bg-white/5' : 'hover:bg-white/5 dark:hover:bg-white/5'}`}
+                  className={`${interactiveRow} ${selectedChatId === c.id ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/60'}`}
                 >
                   <span className="font-medium">{c.title}</span>
                   <span className="text-xs text-muted-foreground">{c.id.slice(0, 6)}…</span>
@@ -148,7 +148,7 @@ export function TemplateDemo() {
         </CardContent>
       </Card>
 
-      <Card className={`${glassCard} lg:col-span-2 flex flex-col`}>
+      <Card className="flex flex-col border-border shadow-sm lg:col-span-2">
         <CardHeader>
           <CardTitle className="text-base">Chat</CardTitle>
         </CardHeader>
@@ -181,7 +181,7 @@ export function TemplateDemo() {
             </Select>
           </div>
 
-          <div className="flex-1 rounded-lg border bg-white/5 dark:bg-white/5 p-3 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto rounded-lg border bg-muted/30 p-3">
             {loadingMessages ? (
               <div className="text-sm text-muted-foreground">Loading messages…</div>
             ) : messages.length ? (
