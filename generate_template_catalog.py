@@ -195,11 +195,24 @@ def extract_frameworks(package_json_path: Path) -> List[str]:
         "concurrently", "pm2", "nodemon"
     ]
     
-    # Find matching frameworks
+    # Find matching frameworks. Package names must match exactly; scoped namespace
+    # patterns such as "@radix-ui" may match packages within that namespace.
     detected_frameworks = []
     for dep in all_deps:
         for pattern in framework_patterns:
-            if pattern in dep.lower():
+            normalized_dep = dep.lower()
+            normalized_pattern = pattern.lower()
+            is_scoped_namespace = (
+                normalized_pattern.startswith('@')
+                and '/' not in normalized_pattern
+            )
+            if (
+                normalized_dep == normalized_pattern
+                or (
+                    is_scoped_namespace
+                    and normalized_dep.startswith(f"{normalized_pattern}/")
+                )
+            ):
                 if pattern not in detected_frameworks:
                     detected_frameworks.append(pattern)
                 break
@@ -244,11 +257,12 @@ def read_template_metadata_from_yaml(template_name: str, definitions_dir: Path) 
         definitions_dir: Path to the definitions directory
 
     Returns:
-        Dictionary with projectType, renderMode, and slideDirectory fields
+        Dictionary with language, projectType, renderMode, and slideDirectory fields
     """
     yaml_file = definitions_dir / f"{template_name}.yaml"
 
     default_metadata = {
+        'language': 'typescript',
         'projectType': 'app',
         'disabled': False,
         'renderMode': None,
@@ -265,6 +279,13 @@ def read_template_metadata_from_yaml(template_name: str, definitions_dir: Path) 
 
         project_type = yaml_data.get('projectType', 'app')
 
+        language = yaml_data.get('language', 'typescript')
+        if not isinstance(language, str) or not language.strip():
+            log_warn(f"Invalid language in {yaml_file}, defaulting to 'typescript'")
+            language = 'typescript'
+        else:
+            language = language.strip()
+
         if project_type not in ['app', 'workflow', 'presentation']:
             log_warn(f"Invalid projectType '{project_type}' in {yaml_file}, defaulting to 'app'")
             project_type = 'app'
@@ -280,6 +301,7 @@ def read_template_metadata_from_yaml(template_name: str, definitions_dir: Path) 
             slide_directory = None
 
         return {
+            'language': language,
             'projectType': project_type,
             'disabled': yaml_data.get('disabled', False),
             'renderMode': render_mode,
@@ -317,7 +339,7 @@ def process_template(template_dir: Path, definitions_dir: Path) -> Dict[str, Any
 
     template_data = {
         "name": template_name,
-        "language": "typescript",
+        "language": metadata['language'],
         "frameworks": frameworks,
         "projectType": metadata['projectType'],
         "disabled": metadata.get('disabled', False),

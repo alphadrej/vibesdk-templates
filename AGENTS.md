@@ -27,4 +27,4 @@ bun run build && bun run lint                            # Build and lint
 - **NEVER edit** `build/` directly - changes lost on regeneration. Edit `reference/` or `definitions/`
 - **NEVER modify** `worker/core-utils.ts` - marked DO NOT TOUCH, breaks DO functionality
 - **Always verify** after changes: `--verify --diffs` to catch unintended changes
-- Only Vite templates active (next-reference and minimal-js-reference are disabled)
+- Active catalog templates include Vite, Next.js, Minimal JavaScript, and Reveal Pro. `minimal-vite`, `reveal-presentation-dev`, and other definitions marked `disabled: true` are excluded from new selection but may still be generated for compatibility.

@@ -1,6 +1,7 @@
 name: "minimal-js"
 description: "Beautiful vanilla HTML, CSS, and JavaScript template with modern UI design. No frameworks - just clean, hand-crafted code for stunning web apps."
 base_reference: "minimal-js-reference"
+language: javascript
 projectType: app
 renderMode: browser
 

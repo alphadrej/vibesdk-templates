@@ -8,7 +8,7 @@ disabled: false
 inherit_dependencies: false
 
 package_patches:
-  name: "c-code-dashboard-next-runner"
+  name: "c-code-next-runner"
   version: "0.1.0"
   type: "commonjs"
   scripts:
