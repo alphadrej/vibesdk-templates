@@ -63,7 +63,7 @@ All templates share common patterns:
 - shadcn/ui + Radix UI component libraries (full templates)
 - Tailwind CSS for styling
 - Comprehensive error boundaries
-- AI Gateway integration patterns
+- Bring-your-own-key AI integration patterns
 
 ## Development Workflows
 
@@ -212,8 +212,8 @@ template_specific_files:
 ## AI Integration Patterns
 
 Templates integrate with AI services through:
-- **Cloudflare AI Gateway** - Centralized API gateway for cost control and analytics
-- **OpenAI SDK** - LLM interactions with proper error handling
+- **User-provided credentials** - `OPENAI_API_KEY` and optional `OPENAI_BASE_URL` are supplied through secret bindings
+- **OpenAI SDK** - OpenAI or OpenAI-compatible LLM interactions with proper no-key handling
 - **Cloudflare Agents SDK** - Stateful AI agents with persistent conversations (vite-cfagents-runner)
 - **MCP (Model Context Protocol)** - Tool integration for AI agents (vite-cfagents-runner)
 

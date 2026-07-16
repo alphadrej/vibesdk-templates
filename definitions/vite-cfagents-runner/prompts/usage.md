@@ -6,13 +6,17 @@ The chat API is powered by Cloudflare Agents (Which is a wrapper on Durable Obje
 
 The agent system uses Durable Objects for persistent state management and conversation history. `/api/chat/:sessionId/*` should be used without modifications for any conversation support. There is also a control plane durable object for session management name AppController.
 
-There are already several models presupplied with the template along with proper configuration (apikeys and base url). You should develop using them instead of adding mock methods.
+AI credentials are bring-your-own-key (BYOK). When building an AI feature, request the user's own provider key through Lumaveno's secret/request-secrets mechanism with the exact secret name `OPENAI_API_KEY`; the worker receives it as `env.OPENAI_API_KEY`. Never use Lumaveno credits or expect a platform-provided AI key. The template defaults to OpenAI, and `OPENAI_BASE_URL` can optionally select an OpenAI-compatible provider.
+
+Every AI request is billed to the app-builder's own provider key. Before exposing AI publicly, add authentication and production-appropriate rate limiting. As safe defaults, this template accepts only the models in `shared/models.ts`, caps each OpenAI completion at 2,048 output tokens, and allows 10 chat requests per 60 seconds per session using the existing `CHAT_AGENT` Durable Object state. Extend or tighten these application-level controls without adding bindings or editing `wrangler.jsonc`/`wrangler.toml`.
+
+The app must remain usable before the secret is added. Keep or build a clear no-key banner/empty state, disable only the AI-dependent controls, and render the worker error `AI not configured - add your OPENAI_API_KEY secret` instead of crashing or returning a generic failure.
 
 - Built with:
   * **React + Vite** for fast frontend development with hot module replacement
   * **Cloudflare Agents SDK** for stateful agent management with persistent Durable Objects
   * **Model Context Protocol (MCP)** client for real server integration
-  * **OpenAI SDK** for AI model integration via Cloudflare AI Gateway
+  * **OpenAI SDK** for AI model integration with the user's own provider credentials
   * **Production MCP Servers** including Cloudflare Bindings and Observability
   * **Tailwind CSS** for utility-first styling with semantic theme tokens
   * **Framer Motion** for smooth chat animations and loading states
@@ -38,12 +42,13 @@ There are already several models presupplied with the template along with proper
   * **Real Protocol**: Uses actual MCP protocol for server communication, not simulation
 
 - Environment Variables:
-  * **CF_AI_BASE_URL**: Cloudflare AI Gateway base URL (required)
-  * **CF_AI_API_KEY**: API key for AI Gateway access (required)
+  * **OPENAI_API_KEY**: User-provided secret required to enable AI features; request it through Lumaveno's secret/request-secrets mechanism and read it only as `env.OPENAI_API_KEY` in the worker
+  * **OPENAI_BASE_URL**: Optional OpenAI-compatible provider base URL; defaults to `https://api.openai.com/v1` when unset
   * **CHAT_AGENT**: Durable Object binding name for agent persistence
 
 - Restrictions:
-  * **Environment variables**: CF_AI_BASE_URL and CF_AI_API_KEY must be configured
+  * **BYOK only**: AI features must use the user's own `OPENAI_API_KEY`; never use a Lumaveno-provided key or Lumaveno credits
+  * **Graceful no-key state**: Keep non-AI features working and show clear setup guidance until `OPENAI_API_KEY` is added
   * **API keys**: Never expose API keys to client-side - they're server-side only in worker
   * **Tool Safety**: Tool functions should validate inputs and handle errors gracefully
   * **Use Agents SDK patterns**: Extend Agent class, use setState for persistence
@@ -87,9 +92,6 @@ There are already several models presupplied with the template along with proper
 - `CHAT_AGENT`: A durable object binding for the chat agent, but can be extended and used for other agentic purposes
 - `APP_CONTROLLER`: A durable object binding for the app controller, but can be extended and used for other agentic purposes
 **IMPORTANT: You are NOT ALLOWED to edit/add/remove ANY worker bindings OR touch wrangler.jsonc/wrangler.toml. Build your application around what is already provided.**
-
-# IMPORTANT NOTE: You must inform the user that although this project has AI capaibilities, There is a limit on the number of requests that can be made to the AI servers across all user apps in a given time period.
-Add the above note in an appropriate and visible location in the app - like in the footer or in the chat interface or as a modal
 
 ---
 

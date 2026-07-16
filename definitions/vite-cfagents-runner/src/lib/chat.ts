@@ -1,16 +1,15 @@
+import { MODELS } from '@shared/models';
+
 import type { Message, ChatState, ToolCall, WeatherResult, MCPResult, ErrorResult, SessionInfo } from '../../worker/types';
+
+export { MODELS };
 
 export interface ChatResponse {
   success: boolean;
   data?: ChatState;
   error?: string;
+  aiConfigured?: boolean;
 }
-
-export const MODELS = [
-  { id: 'google-ai-studio/gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
-  { id: 'google-ai-studio/gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
-  { id: 'google-ai-studio/gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
-];
 
 class ChatService {
   private sessionId: string;
@@ -32,12 +31,17 @@ class ChatService {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message, model, stream: !!onChunk }),
       });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
 
       if (onChunk && response.body) {
+        if (!response.ok) {
+          const result = await response.json() as ChatResponse;
+          return {
+            ...result,
+            success: false,
+            error: result.error || `Request failed (${response.status})`,
+          };
+        }
+
         // Handle streaming response
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -62,7 +66,16 @@ class ChatService {
       }
       
       // Non-streaming response
-      return await response.json();
+      const result = await response.json() as ChatResponse;
+      if (!response.ok) {
+        return {
+          ...result,
+          success: false,
+          error: result.error || `Request failed (${response.status})`,
+        };
+      }
+
+      return result;
     } catch (error) {
       console.error('Failed to send message:', error);
       return { success: false, error: 'Failed to send message' };

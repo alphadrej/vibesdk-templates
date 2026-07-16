@@ -1,3 +1,5 @@
+import type { ModelId } from '../shared/models';
+
 export interface ApiResponse<T = unknown> { success: boolean; data?: T; error?: string; }
 
 export interface WeatherResult {
@@ -34,8 +36,12 @@ export interface ChatState {
   messages: Message[];
   sessionId: string;
   isProcessing: boolean;
-  model: string;
+  model: ModelId;
   streamingMessage?: string;
+  rateLimit?: {
+    windowStartedAt: number;
+    requestCount: number;
+  };
 }
 
 export interface SessionInfo {

@@ -32,9 +32,5 @@
 	},
 	"observability": {
 		"enabled": true
-	},
-	"vars": {
-		"CF_AI_BASE_URL": "https://gateway.ai.cloudflare.com/v1/YOUR_ACCOUNT_ID/YOUR_GATEWAY_ID/openai",
-		"CF_AI_API_KEY": "your-cloudflare-api-key"
 	}
 }
