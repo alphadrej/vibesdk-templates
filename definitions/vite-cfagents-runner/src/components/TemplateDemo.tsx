@@ -12,7 +12,7 @@ import type { ChatState, Message } from '../../worker/types'
 export const HAS_TEMPLATE_DEMO = true
 
 export function TemplateDemo() {
-  const [model, setModel] = useState(MODELS[0]?.id ?? 'gpt-4o-mini')
+  const [model, setModel] = useState<string>(MODELS[0]?.id ?? 'gpt-4o-mini')
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)

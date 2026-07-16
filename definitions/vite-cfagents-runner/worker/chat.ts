@@ -1,7 +1,10 @@
 import OpenAI from 'openai';
+import type { ChatCompletionMessageFunctionToolCall } from 'openai/resources/index.mjs';
+
+import type { ModelId } from '../shared/models';
 import type { Message, ToolCall } from './types';
 import { getToolDefinitions, executeTool } from './tools';
-import { ChatCompletionMessageFunctionToolCall } from 'openai/resources/index.mjs';
+import { MAX_OUTPUT_TOKENS } from './config';
 
 export const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com/v1';
 
@@ -13,9 +16,9 @@ export const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com/v1';
  */
 export class ChatHandler {
   private client: OpenAI;
-  private model: string;
+  private model: ModelId;
 
-  constructor(apiKey: string, model: string, baseURL: string = DEFAULT_OPENAI_BASE_URL) {
+  constructor(apiKey: string, model: ModelId, baseURL: string = DEFAULT_OPENAI_BASE_URL) {
     this.client = new OpenAI({ 
       apiKey,
       baseURL
@@ -44,7 +47,7 @@ export class ChatHandler {
         messages,
         tools: toolDefinitions,
         tool_choice: 'auto',
-        max_completion_tokens: 16000,
+        max_completion_tokens: MAX_OUTPUT_TOKENS,
         stream: true,
         // reasoning_effort: 'low'
       });
@@ -58,7 +61,7 @@ export class ChatHandler {
       messages,
       tools: toolDefinitions,
       tool_choice: 'auto',
-      max_tokens: 16000,
+      max_completion_tokens: MAX_OUTPUT_TOKENS,
       stream: false
     });
 
@@ -204,7 +207,7 @@ export class ChatHandler {
           tool_call_id: openAiToolCalls[index]?.id || result.id
         }))
       ],
-      max_tokens: 16000
+      max_completion_tokens: MAX_OUTPUT_TOKENS
     });
 
     return followUpCompletion.choices[0]?.message?.content || 'Tool results processed successfully.';
@@ -230,7 +233,7 @@ export class ChatHandler {
   /**
    * Update the model for this chat handler
    */
-  updateModel(newModel: string): void {
+  updateModel(newModel: ModelId): void {
     this.model = newModel;
   }
 }

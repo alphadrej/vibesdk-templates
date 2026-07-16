@@ -1,4 +1,8 @@
+import { MODELS } from '@shared/models';
+
 import type { Message, ChatState, ToolCall, WeatherResult, MCPResult, ErrorResult, SessionInfo } from '../../worker/types';
+
+export { MODELS };
 
 export interface ChatResponse {
   success: boolean;
@@ -6,12 +10,6 @@ export interface ChatResponse {
   error?: string;
   aiConfigured?: boolean;
 }
-
-export const MODELS = [
-  { id: 'gpt-4o-mini', name: 'GPT-4o mini' },
-  { id: 'gpt-4o', name: 'GPT-4o' },
-  { id: 'gpt-4.1-mini', name: 'GPT-4.1 mini' },
-];
 
 class ChatService {
   private sessionId: string;

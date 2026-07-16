@@ -5,8 +5,8 @@
 import type { AppController } from './app-controller';
 import type { ChatAgent } from './agent';
 export interface Env {
-    OPENAI_API_KEY?: string;
-    OPENAI_BASE_URL?: string;
+    CF_AI_BASE_URL: string;
+    CF_AI_API_KEY: string;
     SERPAPI_KEY: string;
     OPENROUTER_API_KEY: string;
     CHAT_AGENT: DurableObjectNamespace<ChatAgent>;
