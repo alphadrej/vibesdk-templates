@@ -6,6 +6,18 @@ The chat API is powered by Cloudflare Agents (Which is a wrapper on Durable Obje
 
 The agent system uses Durable Objects for persistent state management and conversation history. `/api/chat/:sessionId/*` should be used without modifications for any conversation support. There is also a control plane durable object for session management name AppController.
 
+## AI spend guard
+
+`POST /api/chat/:sessionId/chat` is public and spends the app owner's AI credentials, so the template protects it with a Durable Object-backed limiter before proxying to the model provider. By default, each Cloudflare client IP (`cf-connecting-ip`) may make 20 AI requests in a sliding 60-second window, and the app may accept 500 AI requests per UTC day. Over-limit requests return HTTP 429 JSON with a `code`, `retryAfterSeconds`, and `Retry-After` header. Message reads and other non-AI chat operations do not consume these limits.
+
+The knobs are named constants in `worker/ai-rate-limit.ts`:
+
+- `AI_RATE_LIMIT_WINDOW_MS` controls the sliding-window duration.
+- `AI_RATE_LIMIT_MAX_REQUESTS` controls requests allowed per IP in that window.
+- `AI_DAILY_REQUEST_LIMIT` controls the app-wide UTC-day request cap; set it to `0` to disable only the daily cap.
+
+Keep a finite per-IP limit for any public deployment. The limiter fails open only when its Durable Object storage is unavailable, logs that backend error, and remains fail-closed for normal over-limit decisions.
+
 There are already several models presupplied with the template along with proper configuration (apikeys and base url). You should develop using them instead of adding mock methods.
 
 - Built with:
