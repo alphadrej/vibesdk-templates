@@ -118,12 +118,10 @@ export default ({ command, mode }: { command: string; mode: string }) => {
     }), cloudflare(), watchDependenciesPlugin(), reloadTriggerPlugin()],
     build: {
       minify: true,
-      sourcemap: "inline", // Use inline source maps for better error reporting
-      rollupOptions: {
-        output: {
-          sourcemapExcludeSources: false, // Include original source in source maps
-        },
-      },
+      // No production source maps: inlining them (with original sources) ships the
+      // full source of a deployed app to anyone who opens devtools. Dev keeps source
+      // maps (vite serve / css.devSourcemap below), which is where debugging happens.
+      sourcemap: false,
     },
     customLogger: env.VITE_LOGGER_TYPE === 'json' ? customLogger : undefined,
     // Enable source maps in development too
