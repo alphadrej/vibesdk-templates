@@ -7,7 +7,48 @@ This script replaces the zip command for environments where it's not available.
 import zipfile
 import os
 import sys
+import fnmatch
 from pathlib import Path
+
+DEFAULT_EXCLUDE_PATTERNS = [
+    "node_modules/*",
+    ".git/*",
+    "*.log",
+    ".DS_Store",
+    "dist/*",
+    "build/*",
+    ".next/*",
+    "coverage/*",
+    ".nyc_output/*",
+    "*.tgz",
+    "*.tar.gz",
+    ".wrangler/*",
+    ".ssh/*",
+    ".aws/*",
+    ".dev.vars",
+    ".dev.vars.*",
+    ".env",
+    ".env.*",
+    ".envrc",
+    "*.pem",
+    "*.key",
+    "*.p12",
+    "*.pfx",
+    "id_rsa",
+    "id_dsa",
+    "id_ecdsa",
+    "id_ed25519",
+    "id_xmss",
+    ".netrc",
+    ".npmrc",
+    ".pypirc",
+    ".yarnrc",
+    "credentials.json",
+    "*credentials*.json",
+    "secret.json",
+    "secrets.json",
+]
+
 
 def create_zip(source_dir, zip_path, exclude_patterns=None):
     """
@@ -19,61 +60,117 @@ def create_zip(source_dir, zip_path, exclude_patterns=None):
         exclude_patterns: List of patterns to exclude (e.g., ["node_modules/*", ".git/*"])
     """
     if exclude_patterns is None:
-        exclude_patterns = [
-            "node_modules/*", ".git/*", "*.log", ".DS_Store",
-            "dist/*", "build/*", ".next/*", "coverage/*",
-            ".nyc_output/*", "*.tgz", "*.tar.gz",
-            ".wrangler/*", ".dev.vars*", ".env.*"
-        ]
-    
-    source_path = Path(source_dir)
-    if not source_path.exists():
+        exclude_patterns = DEFAULT_EXCLUDE_PATTERNS
+
+    source_input = Path(source_dir)
+    if source_input.is_symlink():
+        print(
+            f"Error: Source directory must not be a symbolic link: {source_dir}",
+            file=sys.stderr,
+        )
+        return False
+
+    source_path = source_input.resolve()
+    if not source_path.exists() or not source_path.is_dir():
         print(f"Error: Source directory '{source_dir}' does not exist", file=sys.stderr)
         return False
-    
+
+    zip_target = Path(zip_path)
+    if zip_target.is_symlink():
+        print(
+            f"Error: Output zip path must not be a symbolic link: {zip_path}",
+            file=sys.stderr,
+        )
+        return False
+
     try:
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as zipf:
+        reject_source_symlinks(source_path)
+        with zipfile.ZipFile(zip_target, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as zipf:
             for root, dirs, files in os.walk(source_path):
                 # Convert to relative path from source directory
                 rel_root = Path(root).relative_to(source_path)
-                
+
                 # Filter directories and files based on exclusion patterns
-                dirs[:] = [d for d in dirs if not should_exclude(rel_root / d, exclude_patterns)]
-                files = [f for f in files if not should_exclude(rel_root / f, exclude_patterns)]
-                
+                dirs[:] = [
+                    directory
+                    for directory in dirs
+                    if not should_exclude_logical_and_real_path(
+                        rel_root / directory,
+                        (Path(root) / directory).resolve(strict=True),
+                        source_path,
+                        exclude_patterns,
+                    )
+                ]
+
                 for file in files:
                     file_path = Path(root) / file
+                    try:
+                        resolved_file = file_path.resolve(strict=True)
+                        resolved_file.relative_to(source_path)
+                    except ValueError as error:
+                        raise ValueError(
+                            f"Archive input escapes source directory: {file_path}"
+                        ) from error
                     arc_path = rel_root / file if str(rel_root) != '.' else Path(file)
+                    if should_exclude_logical_and_real_path(
+                        arc_path,
+                        resolved_file,
+                        source_path,
+                        exclude_patterns,
+                    ):
+                        continue
                     zipf.write(file_path, arc_path)
-        
+
         return True
     except Exception as e:
+        if zip_target.is_file() and not zip_target.is_symlink():
+            zip_target.unlink()
         print(f"Error creating zip file: {e}", file=sys.stderr)
         return False
+
+
+def reject_source_symlinks(source_path):
+    """Fail before archiving when any source entry is a symbolic link."""
+    for root, dirs, files in os.walk(source_path, followlinks=False):
+        root_path = Path(root)
+        for name in [*dirs, *files]:
+            entry = root_path / name
+            if entry.is_symlink():
+                raise ValueError(f"Archive source contains symbolic link: {entry}")
+
+
+def should_exclude_logical_and_real_path(
+    logical_path,
+    resolved_path,
+    source_path,
+    exclude_patterns,
+):
+    """Apply the secret policy to both archive names and canonical sources."""
+    real_relative_path = resolved_path.relative_to(source_path)
+    return should_exclude(
+        logical_path,
+        exclude_patterns,
+    ) or should_exclude(real_relative_path, exclude_patterns)
+
 
 def should_exclude(path, exclude_patterns):
     """
     Check if a path should be excluded based on patterns.
     """
     path_str = str(path).replace('\\', '/')
+    while path_str.startswith("./"):
+        path_str = path_str[2:]
+    path_parts = Path(path_str).parts
+    file_name = path_parts[-1] if path_parts else ""
     
     for pattern in exclude_patterns:
         if pattern.endswith('/*'):
-            # Directory pattern
             dir_pattern = pattern[:-2]
-            if path_str.startswith(dir_pattern + '/') or path_str == dir_pattern:
+            if dir_pattern in path_parts:
                 return True
-        elif pattern.endswith('*'):
-            # Prefix pattern (e.g., '.env.*' or '.dev.vars*')
-            prefix = pattern[:-1]
-            if path_str.startswith(prefix):
-                return True
-        elif pattern.startswith('*.'):
-            # File extension pattern
-            if path_str.endswith(pattern[1:]):
-                return True
-        elif pattern in path_str:
-            # Simple substring match
+        elif fnmatch.fnmatch(path_str, pattern) or fnmatch.fnmatch(
+            file_name, pattern
+        ):
             return True
     
     return False

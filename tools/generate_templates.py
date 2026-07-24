@@ -22,6 +22,147 @@ import subprocess
 import concurrent.futures
 
 
+TEMPLATE_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
+TRUSTED_REPO_ROOT = Path(__file__).resolve(strict=True).parent.parent
+
+
+def validate_template_name(value: object) -> str:
+    """Validate names used to select template definition and build directories."""
+    if not isinstance(value, str) or not TEMPLATE_NAME_PATTERN.fullmatch(value):
+        raise ValueError(
+            "Template name must contain only letters, numbers, dashes, and underscores"
+        )
+    return value
+
+
+def resolve_contained_path(root: Path, relative_path: object, label: str) -> Path:
+    """Resolve an untrusted relative path and require it to remain below root."""
+    if not isinstance(relative_path, str) or not relative_path:
+        raise ValueError(f"{label} must be a non-empty relative path")
+    if "\0" in relative_path or "\\" in relative_path:
+        raise ValueError(f"{label} contains an invalid path separator")
+
+    relative = Path(relative_path)
+    if relative.is_absolute():
+        raise ValueError(f"{label} must be relative")
+    if ".." in relative.parts:
+        raise ValueError(f"{label} must not contain parent traversal")
+
+    resolved_root = root.resolve(strict=True)
+    resolved_path = (resolved_root / relative).resolve()
+    try:
+        resolved_path.relative_to(resolved_root)
+    except ValueError as error:
+        raise ValueError(f"{label} must remain inside {resolved_root}") from error
+    if resolved_path == resolved_root:
+        raise ValueError(f"{label} must identify a path below {resolved_root}")
+
+    current = resolved_root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError(f"{label} must not contain symbolic links: {current}")
+        if not current.exists():
+            break
+    return resolved_path
+
+
+def reject_source_symlinks(source_dir: Path, label: str) -> None:
+    """Reject source trees whose logical entries could redirect reads."""
+    for root, dirs, files in os.walk(source_dir, followlinks=False):
+        root_path = Path(root)
+        for name in [*dirs, *files]:
+            entry = root_path / name
+            if entry.is_symlink():
+                raise ValueError(f"{label} must not contain symbolic links: {entry}")
+
+
+def require_real_directory(
+    path: Path,
+    trusted_root: Path,
+    label: str,
+    create_if_missing: bool = False,
+) -> Path:
+    """Require a real directory contained by the canonical repository root."""
+    if path.is_symlink():
+        raise ValueError(f"{label} must be a real non-symlink directory: {path}")
+    if not path.exists() and create_if_missing:
+        path.mkdir(mode=0o700)
+    if not path.exists() or not path.is_dir():
+        raise ValueError(f"{label} must be a real directory: {path}")
+
+    resolved = path.resolve(strict=True)
+    try:
+        resolved.relative_to(trusted_root)
+    except ValueError as error:
+        raise ValueError(
+            f"{label} must remain inside trusted repository root {trusted_root}"
+        ) from error
+    return resolved
+
+
+def validate_template_workspace(
+    root_dir: Path,
+    trusted_root: Path = TRUSTED_REPO_ROOT,
+) -> tuple[Path, Path, Path, Path, Path]:
+    """Validate every generator root before cleanup, reads, or copies."""
+    canonical_trusted_root = trusted_root.resolve(strict=True)
+    if not canonical_trusted_root.is_dir():
+        raise ValueError(
+            f"Trusted repository root must be a directory: {canonical_trusted_root}"
+        )
+    if root_dir.is_symlink():
+        raise ValueError(f"Template root must be a real non-symlink directory: {root_dir}")
+
+    canonical_root = require_real_directory(
+        root_dir,
+        canonical_trusted_root,
+        "Template root",
+    )
+    reference_dir = require_real_directory(
+        canonical_root / "reference",
+        canonical_trusted_root,
+        "reference/",
+    )
+    definitions_dir = require_real_directory(
+        canonical_root / "definitions",
+        canonical_trusted_root,
+        "definitions/",
+    )
+    build_dir = require_real_directory(
+        canonical_root / "build",
+        canonical_trusted_root,
+        "build/",
+        create_if_missing=True,
+    )
+    originals_dir = require_real_directory(
+        canonical_root / "originals",
+        canonical_trusted_root,
+        "originals/",
+        create_if_missing=True,
+    )
+
+    reject_source_symlinks(reference_dir, "reference/")
+    reject_source_symlinks(definitions_dir, "definitions/")
+    reject_source_symlinks(originals_dir, "originals/")
+    return (
+        canonical_root,
+        reference_dir,
+        definitions_dir,
+        build_dir,
+        originals_dir,
+    )
+
+
+def load_template_config(yaml_file: Path) -> Dict[str, Any]:
+    """Load a template definition as a YAML mapping."""
+    with open(yaml_file, "r", encoding="utf-8") as file:
+        config = yaml.safe_load(file)
+    if not isinstance(config, dict):
+        raise ValueError(f"Template definition must be a mapping: {yaml_file}")
+    return config
+
+
 class Colors:
     """ANSI color codes for terminal output"""
 
@@ -50,12 +191,18 @@ def log_error(message: str) -> None:
 class TemplateGenerator:
     """Clean template generator using shared-reference and template directories"""
 
-    def __init__(self, root_dir: Path):
-        self.root_dir = root_dir
-        self.reference_dir = root_dir / "reference"
-        self.definitions_dir = root_dir / "definitions"
-        self.build_dir = root_dir / "build"
-        self.originals_dir = root_dir / "originals"
+    def __init__(
+        self,
+        root_dir: Path,
+        trusted_root: Path = TRUSTED_REPO_ROOT,
+    ):
+        (
+            self.root_dir,
+            self.reference_dir,
+            self.definitions_dir,
+            self.build_dir,
+            self.originals_dir,
+        ) = validate_template_workspace(root_dir, trusted_root)
 
         # DRY ignore patterns used consistently for copy and verify operations
         # Keep both directory names and recursive forms to support both filtering styles
@@ -219,23 +366,29 @@ class TemplateGenerator:
         Returns:
             True if successful, False otherwise
         """
-        reference_path = self.reference_dir / reference_name
-
-        if not reference_path.exists():
-            log_error(f"Reference template not found: {reference_path}")
-            return False
-
         try:
+            reference_path = resolve_contained_path(
+                self.reference_dir, reference_name, "base_reference"
+            )
+            resolved_target = target_dir.resolve()
+            resolved_target.relative_to(self.build_dir.resolve())
+            if resolved_target == self.build_dir.resolve():
+                raise ValueError("Target template directory must be below build/")
+
+            if not reference_path.exists() or not reference_path.is_dir():
+                log_error(f"Reference template not found: {reference_path}")
+                return False
+
             # Remove target if exists
-            if target_dir.exists():
-                shutil.rmtree(target_dir)
+            if resolved_target.exists():
+                shutil.rmtree(resolved_target)
 
             # Create target directory
-            target_dir.mkdir(parents=True)
+            resolved_target.mkdir(parents=True)
 
             # Copy reference template with ignore patterns
-            self.copytree_with_ignores(reference_path, target_dir)
-            log_info(f"Copied {reference_name} reference template to {target_dir}")
+            self.copytree_with_ignores(reference_path, resolved_target)
+            log_info(f"Copied {reference_name} reference template to {resolved_target}")
             return True
 
         except Exception as e:
@@ -261,7 +414,14 @@ class TemplateGenerator:
         Returns:
             True if successful, False otherwise
         """
-        template_dir = self.definitions_dir / template_name
+        try:
+            safe_template_name = validate_template_name(template_name)
+            template_dir = resolve_contained_path(
+                self.definitions_dir, safe_template_name, "template name"
+            )
+        except ValueError as error:
+            log_error(str(error))
+            return False
         exclude_files_set = set(exclude_files or [])
 
         if not template_dir.exists():
@@ -284,7 +444,12 @@ class TemplateGenerator:
                     if file_pattern in exclude_files_set:
                         continue
 
-                    src_path = template_dir / file_pattern
+                    src_path = resolve_contained_path(
+                        template_dir, file_pattern, "template_specific_files entry"
+                    )
+                    dst_path = resolve_contained_path(
+                        target_dir, file_pattern, "template_specific_files entry"
+                    )
 
                     if not src_path.exists():
                         log_warn(f"Specified template file not found: {file_pattern}")
@@ -292,13 +457,11 @@ class TemplateGenerator:
 
                     if src_path.is_file():
                         # Copy single file
-                        dst_path = target_dir / file_pattern
                         dst_path.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(src_path, dst_path)
                         log_info(f"Applied template file: {file_pattern}")
                     else:
                         # Copy directory (respecting ignore patterns)
-                        dst_path = target_dir / file_pattern
                         if dst_path.exists():
                             shutil.rmtree(dst_path)
                         self.copytree_with_ignores(src_path, dst_path)
@@ -340,10 +503,15 @@ class TemplateGenerator:
                             continue
 
                         src_file = root_path / file
-                        dst_file = target_root / file
                         rel_file = str(src_file.relative_to(template_dir))
                         if self._is_ignored(rel_file, self.DEFAULT_IGNORES):
                             continue
+                        src_file = resolve_contained_path(
+                            template_dir, rel_file, "template overlay file"
+                        )
+                        dst_file = resolve_contained_path(
+                            target_dir, rel_file, "template overlay file"
+                        )
 
                         # Copy file, overwriting if it exists
                         shutil.copy2(src_file, dst_file)
@@ -369,7 +537,13 @@ class TemplateGenerator:
                 log_error("file_patches entry missing 'file'")
                 return False
 
-            file_path = target_dir / rel_file
+            try:
+                file_path = resolve_contained_path(
+                    target_dir, rel_file, "file_patches file"
+                )
+            except ValueError as error:
+                log_error(str(error))
+                return False
             if not file_path.exists() or not file_path.is_file():
                 log_error(f"file_patches target not found: {rel_file}")
                 return False
@@ -432,16 +606,16 @@ class TemplateGenerator:
             True if successful, False otherwise
         """
         try:
-            # Load YAML configuration
-            with open(yaml_file, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f)
-
-            template_name = config["name"]
+            config = load_template_config(yaml_file)
+            template_name = validate_template_name(config["name"])
             if config.get("disabled", False):
                 log_info(f"Skipping disabled template: {template_name}")
                 return True
 
             base_reference = config.get("base_reference", "shared-reference")
+            reference_dir = resolve_contained_path(
+                self.reference_dir, base_reference, "base_reference"
+            )
             template_specific_files = config.get("template_specific_files")
             excludes = config.get("excludes", [])
             file_patches = config.get("file_patches", [])
@@ -450,8 +624,9 @@ class TemplateGenerator:
 
             log_info(f"Generating template: {template_name}")
 
-            target_dir = self.build_dir / template_name
-            reference_dir = self.reference_dir / base_reference
+            target_dir = resolve_contained_path(
+                self.build_dir, template_name, "template name"
+            )
 
             # Step 1: Copy reference template
             if not self.copy_reference_template(base_reference, target_dir):
@@ -508,11 +683,16 @@ class TemplateGenerator:
 
         # Find all YAML template definition files
         for yaml_file in self.definitions_dir.glob("*.yaml"):
-            with open(yaml_file, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f)
+            try:
+                config = load_template_config(yaml_file)
+                template_name = validate_template_name(config.get("name"))
+            except (OSError, ValueError, yaml.YAMLError) as error:
+                log_error(str(error))
+                failure_count += 1
+                continue
 
             if config.get("disabled", False):
-                log_info(f"Skipping disabled template: {yaml_file.stem}")
+                log_info(f"Skipping disabled template: {template_name}")
                 skipped_count += 1
                 continue
 
@@ -537,7 +717,16 @@ class TemplateGenerator:
         Returns:
             True if successful, False otherwise
         """
-        yaml_file = self.definitions_dir / f"{template_name}.yaml"
+        try:
+            safe_template_name = validate_template_name(template_name)
+            yaml_file = resolve_contained_path(
+                self.definitions_dir,
+                f"{safe_template_name}.yaml",
+                "template name",
+            )
+        except ValueError as error:
+            log_error(str(error))
+            return False
 
         if not yaml_file.exists():
             log_error(f"Template configuration not found: {yaml_file}")
@@ -568,15 +757,19 @@ class TemplateGenerator:
         keeping a single source of truth for ignore rules.
         """
         base = Path(src)
+        reject_source_symlinks(base, "Template source")
 
         def _ignore(this_src: str, names: List[str]):  # type: ignore[override]
             rels: List[str] = []
             for name in names:
                 p = Path(this_src) / name
                 try:
+                    p.resolve().relative_to(base.resolve())
                     rel = str(Path(p).relative_to(base))
-                except Exception:
-                    rel = name
+                except ValueError as error:
+                    raise ValueError(
+                        f"Template source path escapes {base.resolve()}: {p}"
+                    ) from error
                 rels.append(rel)
             # Decide which names to ignore
             ignored: List[str] = []
@@ -631,8 +824,17 @@ class TemplateGenerator:
         summary_only: bool = False,
         ignores: List[str] = None,
     ) -> bool:
-        orig_dir = self.originals_dir / template_name
-        build_dir = self.build_dir / template_name
+        try:
+            safe_template_name = validate_template_name(template_name)
+            orig_dir = resolve_contained_path(
+                self.originals_dir, safe_template_name, "template name"
+            )
+            build_dir = resolve_contained_path(
+                self.build_dir, safe_template_name, "template name"
+            )
+        except ValueError as error:
+            log_error(str(error))
+            return False
         if not orig_dir.exists():
             log_error(f"Original template not found: {orig_dir}")
             return False
@@ -796,7 +998,14 @@ class TemplateGenerator:
             return 1, f"Failed to run {' '.join(cmd)}: {e}\n"
 
     def run_bun_checks_for_template(self, template_name: str) -> bool:
-        template_dir = self.build_dir / template_name
+        try:
+            safe_template_name = validate_template_name(template_name)
+            template_dir = resolve_contained_path(
+                self.build_dir, safe_template_name, "template name"
+            )
+        except ValueError as error:
+            log_error(str(error))
+            return False
         if not template_dir.exists():
             log_error(f"Build template not found for Bun checks: {template_dir}")
             return False
@@ -835,7 +1044,14 @@ class TemplateGenerator:
         Active templates each own their dependency set in a tracked reference, so the
         generated lockfile belongs beside that reference package.json.
         """
-        template_dir = self.build_dir / template_name
+        try:
+            safe_template_name = validate_template_name(template_name)
+            template_dir = resolve_contained_path(
+                self.build_dir, safe_template_name, "template name"
+            )
+        except ValueError as error:
+            log_error(str(error))
+            return False
         if not template_dir.exists():
             log_error(f"Build template not found for lockfile sync: {template_dir}")
             return False
@@ -856,16 +1072,28 @@ class TemplateGenerator:
             log_error(f"bun.lock not created for {template_name}: {lock_path}")
             return False
 
-        definition_path = self.definitions_dir / f"{template_name}.yaml"
+        definition_path = resolve_contained_path(
+            self.definitions_dir,
+            f"{safe_template_name}.yaml",
+            "template name",
+        )
         try:
-            with open(definition_path, "r", encoding="utf-8") as f:
-                config = yaml.safe_load(f)
+            config = load_template_config(definition_path)
             reference_name = config["base_reference"]
         except Exception as e:
             log_error(f"Failed to read base reference for {template_name}: {e}")
             return False
 
-        dst_lock_path = self.reference_dir / reference_name / "bun.lock"
+        try:
+            reference_path = resolve_contained_path(
+                self.reference_dir, reference_name, "base_reference"
+            )
+            dst_lock_path = resolve_contained_path(
+                reference_path, "bun.lock", "lockfile destination"
+            )
+        except ValueError as error:
+            log_error(str(error))
+            return False
         try:
             shutil.copy2(lock_path, dst_lock_path)
             log_info(f"Synced bun.lock to {dst_lock_path}")
@@ -986,8 +1214,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    root_dir = Path(args.root).resolve()
-    generator = TemplateGenerator(root_dir)
+    try:
+        generator = TemplateGenerator(Path(args.root))
+    except (OSError, ValueError) as error:
+        log_error(f"Invalid template workspace: {error}")
+        sys.exit(1)
 
     # Note: Verification will only run when --verify is explicitly provided.
 

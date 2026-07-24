@@ -30,18 +30,15 @@ echo "✅ Generated template catalog"
 # Create optimized zip files for templates
 echo "📦 Creating optimized zip files for templates..."
 
-# Create zips directory
-mkdir -p zips
-find zips -maxdepth 1 -type f -name '*.zip' -delete
-
-catalog_templates=$(
-  python3 -c 'import json; print("\n".join(item["name"] for item in json.load(open("template_catalog.json", encoding="utf-8"))))'
-)
+# Recreate the archive directory so repository-controlled symlinks cannot survive.
+rm -rf -- zips
+mkdir -- zips
 
 # Function to create fast-extracting zip files using Python
 create_template_zip() {
   local template_dir="$1"
-  local template_name=$(basename "$template_dir")
+  local template_name
+  template_name=$(basename "$template_dir")
   local zip_file="zips/${template_name}.zip"
   
   echo "Creating zip for: $template_name"
@@ -50,7 +47,8 @@ create_template_zip() {
   if python3 create_zip.py "$template_dir" "$zip_file"; then
     # Verify the zip file was created
     if [ -f "$zip_file" ]; then
-      local size=$(du -h "$zip_file" | cut -f1)
+      local size
+      size=$(du -h "$zip_file" | cut -f1)
       echo "✅ Created $zip_file ($size)"
     else
       echo "❌ Failed to create $zip_file"
@@ -64,16 +62,21 @@ create_template_zip() {
 
 # 3) Create zip for each catalog-listed template directory in parallel
 pids=()
-for template_name in $catalog_templates; do
+while IFS= read -r template_name; do
+  if [ -z "$template_name" ]; then
+    continue
+  fi
   dir="build/${template_name}/"
   if [[ -f "$dir/package.json" && (-f "$dir/wrangler.jsonc" || -f "$dir/wrangler.toml") && -d "$dir/prompts" ]]; then
     create_template_zip "$dir" &
-    pids+=($!)
+    pids+=("$!")
   else
     echo "❌ Catalog template $template_name is missing or invalid in build/"
     exit 1
   fi
-done
+done < <(
+  python3 -c 'import json; print("\n".join(item["name"] for item in json.load(open("template_catalog.json", encoding="utf-8"))))'
+)
 
 # Wait for all zip creation processes to complete
 echo "⏳ Waiting for all zip creation processes to complete..."
@@ -92,11 +95,11 @@ echo "✅ Wrangler CLI ready"
 # Determine R2 endpoint based on LOCAL_R2 environment variable
 if [ "${LOCAL_R2:-}" = "true" ]; then
   echo "🏠 LOCAL_R2=true - using local R2 endpoint"
-  R2_FLAGS="--local"
+  R2_FLAGS=("--local")
   R2_ENDPOINT="local R2"
 else
   echo "☁️  Using remote Cloudflare R2"
-  R2_FLAGS="--remote"
+  R2_FLAGS=("--remote")
   R2_ENDPOINT="Cloudflare R2"
 fi
 
@@ -110,7 +113,7 @@ upload_to_r2() {
   local description="$3"
   
   echo "Uploading: $description"
-  if wrangler r2 object put "${R2_BUCKET_NAME}/$r2_key" --file="$file_path" $R2_FLAGS; then
+  if wrangler r2 object put "${R2_BUCKET_NAME}/$r2_key" --file="$file_path" "${R2_FLAGS[@]}"; then
     echo "✅ Successfully uploaded $description"
     return 0
   else
@@ -145,14 +148,14 @@ else
 
   # Start catalog upload in background
   upload_to_r2 "template_catalog.json" "template_catalog.json" "template_catalog.json" &
-  upload_pids+=($!)
+  upload_pids+=("$!")
 
   # Start zip file uploads in background
   for zip_file in zips/*.zip; do
     if [ -f "$zip_file" ]; then
       filename=$(basename "$zip_file")
       upload_to_r2 "$zip_file" "$filename" "$filename" &
-      upload_pids+=($!)
+      upload_pids+=("$!")
     fi
   done
 
